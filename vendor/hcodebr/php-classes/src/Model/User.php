@@ -163,7 +163,7 @@ class User extends Model {
               
                 $code = base64_encode(mcrypt_encrypt(MCRYPT_RIJNDAEL_128, User::SECRET, $dataRecovery["idrecovery"], MCRYPT_MODE_ECB));
 
-                $link = "http://www.hcodecommerce.com.br/admin/forgot/reset?=$code";
+                $link = "http://www.hcodecommerce.com.br/admin/forgot/reset?code=$code";
 
                 $mailer = new Mailer($data["desemail"], $data["desperson"], "Redefinir senha da Hcode Store", "forgot", array(
                     "name"=>$data["desperson"],
@@ -176,6 +176,60 @@ class User extends Model {
             }
 
         }
+    }
+
+    public static function validForgotDecrypt($code)
+    {
+       
+        $idrecovery = mcrypt_decrypt(MCRYPT_RIJNDAEL_128, User::SECRET, base64_decode($code), MCRYPT_MODE_ECB);
+
+        $sql = new Sql();
+
+        $results = $sql->select(
+        "SELECT * 
+        FROM tb_userspasswordsrecoveries a
+        INNER JOIN tb_users b USING(iduser)
+        INNER JOIN tb_persons c USING(idperson)
+        WHERE
+            a.idrecovery = :idrecovery
+            AND
+            a.dtrecovery IS NULL
+            AND
+            DATE_ADD(a.dtregister, INTERVAL 1 HOUR) >= NOW()
+        ", array(
+            ":idrecovery"=>$idrecovery
+        ));
+
+        if (count($results) === 0) 
+        {
+            throw new \Exception("Não foi possível recuperar a senha.", 3);
+        }
+        else
+        {
+            return $results[0];
+        }
+
+    }
+
+    public static function setForgotUsed($idrecovery)
+    {
+
+        $sql = new Sql();
+
+        $sql->query("UPDATE tb_userspasswordsrecoveries SET dtrecovery = NOW() WHERE idrecovery = :idrecovery", array(
+            ":idrecovery"=>$idrecovery
+        ));
+
+    }
+
+    public function setPassword($password)
+    {
+        $sql = new Sql();
+
+        $sql->query("UPDATE tb_users SET despassword = :password WHERE iduser = :iduser", array(
+            ":password"=>$password,
+            ":iduser"=>$this->getiduser()
+        ));
     }
 
 }
